@@ -15,7 +15,6 @@ public class Conexion {
         try {
             con = DriverManager.getConnection(url, usuario, password);
             // Agrega esta línea para confirmar visualmente
-            System.out.println("[OK] Conectado a SQL Server");
         } catch (SQLException e) {
             System.out.println("[ERROR] No se pudo conectar: " + e.getMessage());
         }

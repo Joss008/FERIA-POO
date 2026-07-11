@@ -1,4 +1,5 @@
     package org.example;
+    import java.lang.invoke.StringConcatFactory;
     import java.sql.*;
     import java.util.ArrayList;
     import java.util.List;
@@ -9,7 +10,6 @@
         public void agregarAlumno(AlumnoCalificado alm) {
             String sql = "INSERT INTO Alumnos (codigo, nombre, carrera, edad, faltas, horarioAprobado) VALUES (?, ?, ?, ?, ?, ?)";
 
-            // Usamos miConexion.conectar()
             try (Connection conn = miConexion.conectar();
                  PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -53,7 +53,7 @@
             return lista;
         }
 
-        public Alumno buscarAlumnos(long codigo) {
+        public AlumnoCalificado buscarAlumnos(long codigo) {
             String sql = "SELECT * FROM Alumnos WHERE codigo = ?";
 
             try (Connection conn = miConexion.conectar();
@@ -77,5 +77,36 @@
             }
             throw new IllegalArgumentException("Alumno con codigo: " + codigo + " no encontrado");
         }
+
+
+        public AlumnoCalificado ponerFalta(long codigo) {
+            AlumnoCalificado alm = buscarAlumnos(codigo);
+
+            int nuevasFaltas = alm.getFaltas() + 1;
+            boolean sigueCalificado = nuevasFaltas <= 3;
+
+            String sql = "UPDATE Alumnos SET FALTAS = ?, horarioAprobado = ? WHERE codigo = ?";
+            try (Connection con = miConexion.conectar();
+                 PreparedStatement pstmt = con.prepareStatement(sql)) {
+
+                pstmt.setInt(1, nuevasFaltas);
+                pstmt.setBoolean(2, sigueCalificado);
+                pstmt.setLong(3, codigo);
+
+                pstmt.executeUpdate();
+                if (!sigueCalificado) {
+                    System.out.println("El alumno superó las 3 faltas (Total: " + nuevasFaltas + ") y fue retirado de los calificados.");
+                } else {
+                    System.out.println("Falta registrada correctamente. Total de faltas: " + nuevasFaltas);
+                }
+
+            } catch (SQLException e) {
+                System.out.println("Error al registrar la falta: " + e.getMessage());
+            }
+
+            // 4. Retornamos el objeto alumno actualizado desde la base de datos
+            return buscarAlumnos(codigo);
+        }
     }
+
 

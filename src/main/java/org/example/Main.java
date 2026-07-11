@@ -24,8 +24,7 @@ public class Main {
                     2.- Buscar alumno por código
                     3.- Agregar a un alumno a la lista
                     4.- Poner una falta al alumno
-                    5.- Lista de Alumnos Totales
-                    6.- Salir""");
+                    5.- Salir""");
 
             opcion = teclado.nextInt();
             teclado.nextLine();
@@ -57,18 +56,17 @@ public class Main {
                     admin1.agregarAlumno(new AlumnoCalificado(nombre, carrera, codigoAgregar, edad, 0, true));
                     break;
                 case 4:
-                    System.out.println("Aun en desarrollo");
+                    System.out.println("Ingrese el codigo del alumno");
+                    long codigoBuscar = teclado.nextLong();
+                    admin1.ponerFalta(codigoBuscar);
                     break;
                 case 5:
-                    System.out.println("Aun en desarrollo");
-                    break;
-                case 6:
                     System.out.println("Finalizando el programa....");
                     break;
                 default:
                     System.out.println("Numero o carácter invalido");
             }
-        } while (opcion != 6);
+        } while (opcion != 5);
 
         teclado.close();
     }
