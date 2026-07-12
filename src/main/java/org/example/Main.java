@@ -1,20 +1,30 @@
 package org.example;
-
 import java.util.Scanner;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
+/*
+Clase principal del programa.
+ */
 public class Main {
     static void main() {
         Scanner teclado = new Scanner(System.in);
+
+        /*
+        Indexamos un objeto
+         */
 
         GestorAlumno admin1 = new GestorAlumno();
         //admin1.agregarAlumno(new Alumno("Jeff","Ing Sistemas",2511130064L,true,18,1));
         //admin1.agregarAlumno(new Alumno("Josue","Ing Sistemas",2511130062L,false,19,0));
         //admin1.agregarAlumno(new Alumno("Martin","Ing Sistemas",2511130065L,true,16,2));
 
+        /*
+        Variable que usaremos para la toma de decisiones en el switch
+         */
         int opcion;
 
+        /*
+        Usamos el bucle do while para que el programa siga funcionando hasta que el usuario decida salir del programa
+         */
         do {
             System.out.println("""
                     =====================================================
@@ -28,7 +38,9 @@ public class Main {
 
             opcion = teclado.nextInt();
             teclado.nextLine();
-
+            /**
+             * Switch que se usara con 5 acciones incluído finaliza programa.ñ
+             */
             switch (opcion) {
                 case 1:
                     System.out.println(admin1.obtenerAlumnos());

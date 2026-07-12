@@ -1,8 +1,12 @@
     package org.example;
-    import java.lang.invoke.StringConcatFactory;
     import java.sql.*;
     import java.util.ArrayList;
     import java.util.List;
+
+    /*
+    Clase que nos servira para gestionar los objetos de clase AlumnoCalificado
+    aqui construiremos metodos para la interaccion de
+     */
 
     public class GestorAlumno {
         private Conexion miConexion = new Conexion();
@@ -27,7 +31,9 @@
                 System.out.println("Error al guardar el alumno: " + e.getMessage());
             }
         }
-
+/*
+Enlistamos los alumnos que estén calificados, identificados con la variable horarioAprobado.
+ */
         public List<Alumno> obtenerAlumnos() {
             List<Alumno> lista = new ArrayList<>();
             String sql = "SELECT * FROM Alumnos WHERE horarioAprobado = 1";
@@ -52,7 +58,9 @@
             }
             return lista;
         }
-
+/*
+    Método que sera usado para buscar alumnos con su codigo universitario
+ */
         public AlumnoCalificado buscarAlumnos(long codigo) {
             String sql = "SELECT * FROM Alumnos WHERE codigo = ?";
 
@@ -78,7 +86,10 @@
             throw new IllegalArgumentException("Alumno con codigo: " + codigo + " no encontrado");
         }
 
-
+/*
+Metodo que servira para colocar faltas a los alumnos que no asistan
+si tienen mas de 3 faltas se los retira de la lista de alumnos calificados
+ */
         public AlumnoCalificado ponerFalta(long codigo) {
             AlumnoCalificado alm = buscarAlumnos(codigo);
 
@@ -103,8 +114,6 @@
             } catch (SQLException e) {
                 System.out.println("Error al registrar la falta: " + e.getMessage());
             }
-
-            // 4. Retornamos el objeto alumno actualizado desde la base de datos
             return buscarAlumnos(codigo);
         }
     }
