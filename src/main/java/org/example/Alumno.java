@@ -1,25 +1,29 @@
 package org.example;
+
 /*
 Clase que servira como clase padre, que simula un alumno de la universidad
-con 4 atributos caracteristicos de los alumnos (NOMBRE, CARRERA, CODIGO y EDAD)
+con 5 atributos caracteristicos de los alumnos (NOMBRE, APELLIDO, CARRERA, CODIGO y EDAD)
  */
 public class Alumno {
     private String nombre;
+    private String apellido;
     private String carrera;
     private long codigo;
     private int edad;
+
 /*
 Constructor de la clase padre Alumno
  */
-    public Alumno(String nombre, String carrera, long codigo,int edad) {
+    public Alumno(String nombre, String apellido, String carrera, long codigo, int edad) {
         this.nombre = nombre;
+        this.apellido = apellido;
         this.carrera = carrera;
         this.codigo = codigo;
         this.edad = edad;
     }
+
 /*
-Setters y Getters de los atributos encapsulados que serviran como un vidrio blindado
-para ver y modificar atributos privados.
+Setters y Getters de los atributos encapsulados
  */
     public String getNombre() {
         return nombre;
@@ -27,6 +31,14 @@ para ver y modificar atributos privados.
 
     public void setNombre(String nombre) {
         this.nombre = nombre;
+    }
+
+    public String getApellido() {
+        return apellido;
+    }
+
+    public void setApellido(String apellido) {
+        this.apellido = apellido;
     }
 
     public String getCarrera() {
@@ -45,7 +57,6 @@ para ver y modificar atributos privados.
         this.codigo = codigo;
     }
 
-
     public int getEdad() {
         return edad;
     }
@@ -53,11 +64,12 @@ para ver y modificar atributos privados.
     public void setEdad(int edad) {
         this.edad = edad;
     }
+
 /*
 Modificamos con @Override para ver un mensaje más amigable y entendible
  */
     @Override
     public String toString() {
-        return "\nNombre: " + nombre + " | Carrera: " + carrera + " | Codigo: " + codigo + " | Edad: " + edad + " | ";
+        return "\nNombre: " + nombre + " " + apellido + " | Carrera: " + carrera + " | Codigo: " + codigo + " | Edad: " + edad + " | ";
     }
 }

@@ -12,14 +12,44 @@
         <maven.compiler.source>26</maven.compiler.source>
         <maven.compiler.target>26</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Versión de JavaFX -->
+        <javafx.version>22.0.1</javafx.version>
     </properties>
+
     <dependencies>
+        <!-- Driver de SQL Server que ya tenías -->
         <dependency>
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>
             <version>13.4.0.jre11</version>
         </dependency>
+
+        <!-- Librería principal de JavaFX -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- Librería para usar archivos de diseño FXML -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
     </dependencies>
 
-
+    <build>
+        <plugins>
+            <!-- Plugin para ejecutar JavaFX desde Maven -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>org.example.Launcher</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

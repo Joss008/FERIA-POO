@@ -1,11 +1,12 @@
 package org.example;
+import java.sql.SQLException;
 import java.util.Scanner;
 
 /*
 Clase principal del programa.
  */
 public class Main {
-    static void main() {
+    static void main() throws SQLException {
         Scanner teclado = new Scanner(System.in);
 
         /*
@@ -58,6 +59,8 @@ public class Main {
                 case 3:
                     System.out.println("Ingrese el nombre del estudiante");
                     String nombre = teclado.nextLine();
+                    System.out.println("Ingrese el apellido del estudiante");
+                    String apellido = teclado.nextLine();
                     System.out.println("Ingrese la carrera del estudiante ");
                     String carrera = teclado.nextLine();
                     System.out.println("Ingrese el código del estudiante");
@@ -65,7 +68,7 @@ public class Main {
                     System.out.println("Ingrese la edad del alumno");
                     int edad = teclado.nextInt();
                     teclado.nextLine();
-                    admin1.agregarAlumno(new AlumnoCalificado(nombre, carrera, codigoAgregar, edad, 0, true));
+                    admin1.agregarAlumno(new AlumnoCalificado(nombre, apellido, carrera, codigoAgregar, edad, 0, true));
                     break;
                 case 4:
                     System.out.println("Ingrese el codigo del alumno");
