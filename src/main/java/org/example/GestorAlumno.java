@@ -10,66 +10,7 @@ Clase que nos servira para gestionar los objetos de clase AlumnoCalificado
 public class GestorAlumno {
     private Conexion miConexion = new Conexion();
 
-    public GestorAlumno() {
-        // Inicializamos y verificamos la base de datos automáticamente al instanciar el gestor
-        verificarYCrearEsquema();
-    }
 
-    /*
-    Verifica si la tabla y la columna 'apellido' existen, y si no, las crea de forma automática.
-     */
-    public void verificarYCrearEsquema() {
-        String sqlCrearTabla = "CREATE TABLE Alumnos ("
-                + "codigo BIGINT PRIMARY KEY, "
-                + "nombre VARCHAR(100) NOT NULL, "
-                + "apellido VARCHAR(100) NOT NULL, "
-                + "carrera VARCHAR(100) NOT NULL, "
-                + "edad INT NOT NULL, "
-                + "faltas INT DEFAULT 0, "
-                + "horarioAprobado BIT DEFAULT 1"
-                + ")";
-
-        String sqlCheckColumna = "SELECT COL_LENGTH('Alumnos', 'apellido') AS ColSize";
-        String sqlAgregarColumna = "ALTER TABLE Alumnos ADD apellido VARCHAR(100) NULL";
-
-        try (Connection conn = miConexion.conectar()) {
-            if (conn == null) {
-                System.out.println("[WARN] No se pudo conectar a la base de datos para verificar el esquema.");
-                return;
-            }
-
-            DatabaseMetaData dbm = conn.getMetaData();
-            try (ResultSet tables = dbm.getTables(null, null, "Alumnos", null)) {
-                if (!tables.next()) {
-                    // La tabla no existe, la creamos desde cero
-                    try (Statement stmt = conn.createStatement()) {
-                        stmt.executeUpdate(sqlCrearTabla);
-                        System.out.println("[DB] Tabla 'Alumnos' creada exitosamente.");
-                    }
-                } else {
-                    // La tabla ya existe, verificamos si falta la columna 'apellido'
-                    try (PreparedStatement pstmt = conn.prepareStatement(sqlCheckColumna);
-                         ResultSet rs = pstmt.executeQuery()) {
-                        if (rs.next()) {
-                            // Si el tamaño/longitud de la columna es null, significa que no existe
-                            rs.getObject("ColSize");
-                            if (rs.wasNull()) {
-                                try (Statement stmt = conn.createStatement()) {
-                                    stmt.executeUpdate(sqlAgregarColumna);
-                                    System.out.println("[DB] Columna 'apellido' agregada exitosamente a la tabla 'Alumnos'.");
-                                    
-                                    // Opcional: Llenar registros existentes con un apellido vacío o default
-                                    stmt.executeUpdate("UPDATE Alumnos SET apellido = '' WHERE apellido IS NULL");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            System.out.println("[ERROR DB] Error al verificar/migrar la base de datos: " + e.getMessage());
-        }
-    }
 
     public void agregarAlumno(AlumnoCalificado alm) throws SQLException {
         String sql = "INSERT INTO Alumnos (codigo, nombre, apellido, carrera, edad, faltas, horarioAprobado) VALUES (?, ?, ?, ?, ?, ?, ?)";
@@ -159,7 +100,7 @@ public class GestorAlumno {
 
     /*
     Metodo que servira para colocar faltas a los alumnos que no asistan
-    si tienen mas de 3 faltas se los retira de la lista de alumnos calificados
+    si tienen más de 3 faltas se los retira de la lista de alumnos calificados
      */
     public AlumnoCalificado ponerFalta(long codigo) {
         AlumnoCalificado alm = buscarAlumnos(codigo);
