@@ -186,3 +186,18 @@
     -fx-background-color: #000000;
     -fx-effect: dropshadow(three-pass-box, rgba(33, 33, 33, 0.4), 8, 0, 0, 3);
 }
+
+/* Panel de estado de hilos */
+.thread-status-bar {
+    -fx-background-color: #e3f2fd;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-color: #bbdefb;
+    -fx-padding: 10 14;
+}
+
+.thread-log {
+    -fx-control-inner-background: #fafafa;
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 12px;
+}

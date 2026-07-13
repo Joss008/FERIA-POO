@@ -5,14 +5,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /*
-Clase que nos servira para gestionar los objetos de clase AlumnoCalificado
+Clase que nos servira para gestionar los objetos de clase AlumnoCalificado.
+Los métodos sincronizados permiten acceso seguro cuando varios hilos consultan o modifican datos.
  */
 public class GestorAlumno {
     private Conexion miConexion = new Conexion();
 
-
-
-    public void agregarAlumno(AlumnoCalificado alm) throws SQLException {
+    public synchronized void agregarAlumno(AlumnoCalificado alm) throws SQLException {
         String sql = "INSERT INTO Alumnos (codigo, nombre, apellido, carrera, edad, faltas, horarioAprobado) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = miConexion.conectar()) {
@@ -37,7 +36,7 @@ public class GestorAlumno {
     /*
     Enlistamos los alumnos que estén calificados, identificados con la variable horarioAprobado.
      */
-    public List<Alumno> obtenerAlumnos() throws SQLException {
+    public synchronized List<Alumno> obtenerAlumnos() throws SQLException {
         List<Alumno> lista = new ArrayList<>();
         String sql = "SELECT * FROM Alumnos WHERE horarioAprobado = 1";
 
@@ -68,7 +67,7 @@ public class GestorAlumno {
     /*
     Método que sera usado para buscar alumnos con su codigo universitario
      */
-    public AlumnoCalificado buscarAlumnos(long codigo) {
+    public synchronized AlumnoCalificado buscarAlumnos(long codigo) {
         String sql = "SELECT * FROM Alumnos WHERE codigo = ?";
 
         try (Connection conn = miConexion.conectar()) {
@@ -102,7 +101,7 @@ public class GestorAlumno {
     Metodo que servira para colocar faltas a los alumnos que no asistan
     si tienen más de 3 faltas se los retira de la lista de alumnos calificados
      */
-    public AlumnoCalificado ponerFalta(long codigo) {
+    public synchronized AlumnoCalificado ponerFalta(long codigo) {
         AlumnoCalificado alm = buscarAlumnos(codigo);
 
         int nuevasFaltas = alm.getFaltas() + 1;
@@ -130,7 +129,7 @@ public class GestorAlumno {
     Método para revocar (quitar) faltas a los alumnos.
     Si al quitar faltas el total es menor o igual a 3, el alumno vuelve a estar calificado.
      */
-    public AlumnoCalificado revocarFalta(long codigo, int cantidadQuitar) {
+    public synchronized AlumnoCalificado revocarFalta(long codigo, int cantidadQuitar) {
         if (cantidadQuitar <= 0) {
             throw new IllegalArgumentException("La cantidad de faltas a quitar debe ser mayor a 0.");
         }

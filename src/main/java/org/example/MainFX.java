@@ -18,15 +18,23 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
-import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 public class MainFX extends Application {
+
+    private static final int INTERVALO_SINCRONIZACION_SEG = 15;
 
     private GestorAlumno admin1 = new GestorAlumno();
     private TableView<AlumnoCalificado> table = new TableView<>();
     private ObservableList<AlumnoCalificado> data = FXCollections.observableArrayList();
     private Label totalAlumnosLabel = new Label("0");
+
+    private HiloSincronizacion hiloSincronizacion;
+    private boolean operacionEnCurso = false;
+    private ProgressIndicator progressCarga = new ProgressIndicator();
+    private Label lblEstadoSistema = new Label("Sistema listo");
 
     private double xOffset = 0;
     private double yOffset = 0;
@@ -148,29 +156,95 @@ public class MainFX extends Application {
     }
 
     private void actualizarDatosTabla() {
-        try {
-            System.out.println("[DEBUG] Iniciando actualizarDatosTabla()...");
-            List<Alumno> alumnos = admin1.obtenerAlumnos();
-            System.out.println("[DEBUG] Alumnos recuperados de la BD: " + (alumnos == null ? "null" : alumnos.size()));
-            data.clear();
-            if (alumnos != null) {
-                for (Alumno a : alumnos) {
-                    System.out.println("[DEBUG] Evaluando alumno: " + a.getNombre() + " " + a.getApellido() + " (tipo: " + a.getClass().getName() + ")");
-                    if (a instanceof AlumnoCalificado) {
-                        data.add((AlumnoCalificado) a);
-                        System.out.println("[DEBUG] Alumno agregado a la lista observable.");
-                    } else {
-                        System.out.println("[DEBUG] ¡El alumno no es instancia de AlumnoCalificado!");
-                    }
-                }
-            }
-            System.out.println("[DEBUG] Tamaño final de 'data' (lista observable): " + data.size());
-            System.out.println("[DEBUG] TableView setItems: " + (table.getItems() == data ? "Correctamente vinculada" : "¡DESVINCULADA!"));
-            actualizarResumenComedor();
-        } catch (SQLException e) {
-            System.out.println("[ERROR] Error al cargar alumnos: " + e.getMessage());
-            mostrarAlerta("Error de Base de Datos", "No se pudo cargar la lista de alumnos:\n" + e.getMessage());
+        actualizarDatosTabla(false);
+    }
+
+    private void actualizarDatosTabla(boolean silencioso) {
+        if (operacionEnCurso) {
+            return;
         }
+
+        ejecutarTarea(
+                silencioso ? "Sincronizando lista de alumnos..." : "Cargando lista de alumnos...",
+                () -> {
+                    List<Alumno> alumnos = admin1.obtenerAlumnos();
+                    List<AlumnoCalificado> calificados = new ArrayList<>();
+                    if (alumnos != null) {
+                        for (Alumno alumno : alumnos) {
+                            if (alumno instanceof AlumnoCalificado calificado) {
+                                calificados.add(calificado);
+                            }
+                        }
+                    }
+                    return List.copyOf(calificados);
+                },
+                calificados -> {
+                    data.setAll(calificados);
+                    actualizarResumenComedor();
+                    lblEstadoSistema.setText("Lista actualizada (" + calificados.size() + " alumnos)");
+                },
+                error -> {
+                    lblEstadoSistema.setText("No se pudo actualizar la lista");
+                    if (!silencioso) {
+                        mostrarAlerta("Error de Base de Datos", "No se pudo cargar la lista de alumnos:\n" + error.getMessage());
+                    }
+                },
+                "HiloCargaAlumnos"
+        );
+    }
+
+    private <T> void ejecutarTarea(String mensajeEstado, Callable<T> trabajo, java.util.function.Consumer<T> alCompletar,
+                                   java.util.function.Consumer<Exception> alFallar, String nombreHilo, Node... controles) {
+        if (operacionEnCurso) {
+            return;
+        }
+
+        operacionEnCurso = true;
+        establecerControles(false, controles);
+        lblEstadoSistema.setText(mensajeEstado);
+        progressCarga.setVisible(true);
+
+        TareaComedor<T> tarea = new TareaComedor<>(
+                nombreHilo,
+                trabajo,
+                resultado -> {
+                    operacionEnCurso = false;
+                    progressCarga.setVisible(false);
+                    establecerControles(true, controles);
+                    alCompletar.accept(resultado);
+                },
+                error -> {
+                    operacionEnCurso = false;
+                    progressCarga.setVisible(false);
+                    establecerControles(true, controles);
+                    alFallar.accept(error);
+                }
+        );
+        tarea.start();
+    }
+
+    private void establecerControles(boolean habilitado, Node... controles) {
+        for (Node control : controles) {
+            control.setDisable(!habilitado);
+        }
+    }
+
+    private void iniciarSincronizacionAutomatica() {
+        detenerSincronizacionAutomatica();
+        hiloSincronizacion = new HiloSincronizacion(INTERVALO_SINCRONIZACION_SEG, () -> actualizarDatosTabla(true));
+        hiloSincronizacion.start();
+        lblEstadoSistema.setText("Sincronización automática activa");
+    }
+
+    private void detenerSincronizacionAutomatica() {
+        if (hiloSincronizacion != null && hiloSincronizacion.isAlive()) {
+            hiloSincronizacion.detener();
+        }
+        hiloSincronizacion = null;
+    }
+
+    private void detenerHilos() {
+        detenerSincronizacionAutomatica();
     }
 
     private HBox createCustomTitleBar(Stage stage, String subtitle) {
@@ -261,32 +335,45 @@ public class MainFX extends Application {
         grid.add(lblMensajeForm, 1, 6);
 
         btnGuardar.setOnAction(e -> {
+            String nombre = txtNombre.getText().trim();
+            String apellido = txtApellido.getText().trim();
+            String carrera = txtCarrera.getText().trim();
+            String strCodigo = txtCodigo.getText().trim();
+            String strEdad = txtEdad.getText().trim();
+
+            if (nombre.isEmpty() || apellido.isEmpty() || carrera.isEmpty() || strCodigo.isEmpty() || strEdad.isEmpty()) {
+                mostrarAlerta("Campos vacíos", "Por favor complete todos los datos del alumno.");
+                return;
+            }
+
             try {
-                String nombre = txtNombre.getText().trim();
-                String apellido = txtApellido.getText().trim();
-                String carrera = txtCarrera.getText().trim();
-                String strCodigo = txtCodigo.getText().trim();
-                String strEdad = txtEdad.getText().trim();
-
-                if (nombre.isEmpty() || apellido.isEmpty() || carrera.isEmpty() || strCodigo.isEmpty() || strEdad.isEmpty()) {
-                    mostrarAlerta("Campos vacíos", "Por favor complete todos los datos del alumno.");
-                    return;
-                }
-
                 long codigo = Long.parseLong(strCodigo);
                 int edad = Integer.parseInt(strEdad);
+                AlumnoCalificado nuevoAlumno = new AlumnoCalificado(nombre, apellido, carrera, codigo, edad, 0, true);
 
-                admin1.agregarAlumno(new AlumnoCalificado(nombre, apellido, carrera, codigo, edad, 0, true));
-
-                lblMensajeForm.setText("✔ Alumno agregado exitosamente.");
-                lblMensajeForm.setStyle("-fx-text-fill: #388e3c; -fx-font-weight: bold;");
-                txtNombre.clear(); txtApellido.clear(); txtCarrera.clear(); txtCodigo.clear(); txtEdad.clear();
-                actualizarDatosTabla();
+                ejecutarTarea(
+                        "Guardando alumno en la base de datos...",
+                        () -> {
+                            admin1.agregarAlumno(nuevoAlumno);
+                            return nuevoAlumno;
+                        },
+                        guardado -> {
+                            lblMensajeForm.setText("✔ Alumno agregado exitosamente.");
+                            lblMensajeForm.setStyle("-fx-text-fill: #388e3c; -fx-font-weight: bold;");
+                            txtNombre.clear();
+                            txtApellido.clear();
+                            txtCarrera.clear();
+                            txtCodigo.clear();
+                            txtEdad.clear();
+                            actualizarDatosTabla();
+                        },
+                        error -> mostrarAlerta("Error de Base de Datos", "No se pudo guardar el alumno: " + error.getMessage()),
+                        "HiloGuardarAlumno",
+                        btnGuardar
+                );
             } catch (NumberFormatException ex) {
                 lblMensajeForm.setText("✖ Error: Código y Edad deben ser números.");
                 lblMensajeForm.setStyle("-fx-text-fill: #d32f2f; -fx-font-weight: bold;");
-            } catch (Exception ex) {
-                mostrarAlerta("Error de Base de Datos", "No se pudo guardar el alumno: " + ex.getMessage());
             }
         });
 
@@ -343,58 +430,92 @@ public class MainFX extends Application {
 
         TableColumn<AlumnoCalificado, Long> colCodigo = new TableColumn<>("Código");
         colCodigo.setMinWidth(120);
-        colCodigo.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(cellData.getValue().getCodigo()));
+        colCodigo.setCellValueFactory(new PropertyValueFactory<>("codigo"));
 
         TableColumn<AlumnoCalificado, String> colNombre = new TableColumn<>("Nombres");
         colNombre.setMinWidth(180);
-        colNombre.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getNombre()));
+        colNombre.setCellValueFactory(new PropertyValueFactory<>("nombre"));
 
         TableColumn<AlumnoCalificado, String> colApellido = new TableColumn<>("Apellidos");
         colApellido.setMinWidth(180);
-        colApellido.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getApellido()));
+        colApellido.setCellValueFactory(new PropertyValueFactory<>("apellido"));
 
         TableColumn<AlumnoCalificado, String> colCarrera = new TableColumn<>("Carrera");
         colCarrera.setMinWidth(180);
-        colCarrera.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getCarrera()));
+        colCarrera.setCellValueFactory(new PropertyValueFactory<>("carrera"));
 
         TableColumn<AlumnoCalificado, Integer> colEdad = new TableColumn<>("Edad");
         colEdad.setMinWidth(70);
-        colEdad.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(cellData.getValue().getEdad()));
+        colEdad.setCellValueFactory(new PropertyValueFactory<>("edad"));
 
         TableColumn<AlumnoCalificado, Integer> colFaltas = new TableColumn<>("Faltas");
         colFaltas.setMinWidth(70);
-        colFaltas.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(cellData.getValue().getFaltas()));
+        colFaltas.setCellValueFactory(new PropertyValueFactory<>("faltas"));
 
         TableColumn<AlumnoCalificado, Boolean> colCalificado = new TableColumn<>("Calificado");
         colCalificado.setMinWidth(110);
-        colCalificado.setCellValueFactory(cellData -> new javafx.beans.property.SimpleObjectProperty<>(cellData.getValue().isHorarioAprobado()));
+        colCalificado.setCellValueFactory(new PropertyValueFactory<>("horarioAprobado"));
+
+        // Mantenemos tu diseño visual (status Activo/Retirado) intacto
         colCalificado.setCellFactory(column -> new TableCell<AlumnoCalificado, Boolean>() {
             @Override
             protected void updateItem(Boolean item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setGraphic(null);
+                    setText(null); // Añadimos esto por seguridad visual
                 } else {
                     Label status = new Label(item ? "Activo" : "Retirado");
-                    status.setStyle(item ? "-fx-background-color: #e8f5e9; -fx-text-fill: #2e7d32; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;" 
-                                         : "-fx-background-color: #ffebee; -fx-text-fill: #c62828; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;");
+                    status.setStyle(item ? "-fx-background-color: #e8f5e9; -fx-text-fill: #2e7d32; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;"
+                            : "-fx-background-color: #ffebee; -fx-text-fill: #c62828; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;");
                     setGraphic(status);
+                    setText(null);
                 }
             }
         });
 
-        table.getColumns().clear();
-        table.getColumns().addAll(colCodigo, colNombre, colApellido, colCarrera, colEdad, colFaltas, colCalificado);
+        table.getColumns().setAll(List.of(
+                colCodigo, colNombre, colApellido, colCarrera, colEdad, colFaltas, colCalificado
+        ));
         table.setItems(data);
         table.setPlaceholder(new Label("No hay alumnos registrados en el sistema o error de BD."));
         VBox.setVgrow(table, Priority.ALWAYS);
+
+        progressCarga.setMaxSize(24, 24);
+        progressCarga.setVisible(false);
+
+        CheckBox chkSincronizacion = new CheckBox("Mantener lista actualizada automáticamente");
+        chkSincronizacion.setOnAction(e -> {
+            if (chkSincronizacion.isSelected()) {
+                iniciarSincronizacionAutomatica();
+            } else {
+                detenerSincronizacionAutomatica();
+                lblEstadoSistema.setText("Sincronización automática desactivada");
+            }
+        });
+
+        HBox estadoSistema = new HBox(12);
+        estadoSistema.setAlignment(Pos.CENTER_LEFT);
+        estadoSistema.getStyleClass().add("thread-status-bar");
+        estadoSistema.getChildren().addAll(progressCarga, lblEstadoSistema);
 
         Button btnActualizar = new Button("Actualizar Lista");
         btnActualizar.getStyleClass().add("btn-secondary");
         btnActualizar.setOnAction(e -> actualizarDatosTabla());
 
-        content.getChildren().addAll(lblHeader, table, btnActualizar);
+        HBox accionesLista = new HBox(20);
+        accionesLista.setAlignment(Pos.CENTER_LEFT);
+        accionesLista.getChildren().addAll(btnActualizar, chkSincronizacion);
+
+        content.getChildren().addAll(lblHeader, table, estadoSistema, accionesLista);
+        tab.setContent(content);
         return tab;
+    }
+
+    @Override
+    public void stop() throws Exception {
+        detenerHilos();
+        super.stop();
     }
 
     private Tab createTabBusquedaReportes() {
@@ -435,20 +556,31 @@ public class MainFX extends Application {
 
         btnBuscar.setOnAction(e -> {
             lblResultadoBusqueda.setVisible(false);
+            String val = txtCodigoBuscar.getText().trim();
+            if (val.isEmpty()) return;
+
             try {
-                String val = txtCodigoBuscar.getText().trim();
-                if (val.isEmpty()) return;
                 long codigo = Long.parseLong(val);
-                AlumnoCalificado encontrado = admin1.buscarAlumnos(codigo);
-                lblResultadoBusqueda.setText("✔ Encontrado:\n" + encontrado.getNombre() + " " + encontrado.getApellido() + "\nCarrera: " + encontrado.getCarrera() + "\nFaltas: " + encontrado.getFaltas() + "\nCódigo: " + encontrado.getCodigo());
-                lblResultadoBusqueda.setStyle("-fx-background-color: #e3f2fd; -fx-border-color: #bbdefb; -fx-text-fill: #0277bd; -fx-font-weight: bold;");
-                lblResultadoBusqueda.setVisible(true);
+                ejecutarTarea(
+                        "Buscando alumno...",
+                        () -> admin1.buscarAlumnos(codigo),
+                        encontrado -> {
+                            lblResultadoBusqueda.setText("✔ Encontrado:\n" + encontrado.getNombre() + " " + encontrado.getApellido()
+                                    + "\nCarrera: " + encontrado.getCarrera() + "\nFaltas: " + encontrado.getFaltas()
+                                    + "\nCódigo: " + encontrado.getCodigo());
+                            lblResultadoBusqueda.setStyle("-fx-background-color: #e3f2fd; -fx-border-color: #bbdefb; -fx-text-fill: #0277bd; -fx-font-weight: bold;");
+                            lblResultadoBusqueda.setVisible(true);
+                        },
+                        error -> {
+                            lblResultadoBusqueda.setText(error.getMessage());
+                            lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
+                            lblResultadoBusqueda.setVisible(true);
+                        },
+                        "HiloBuscarAlumno",
+                        btnBuscar, btnFalta
+                );
             } catch (NumberFormatException ex) {
                 lblResultadoBusqueda.setText("Ingrese un código numérico válido.");
-                lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
-                lblResultadoBusqueda.setVisible(true);
-            } catch (Exception ex) {
-                lblResultadoBusqueda.setText(ex.getMessage());
                 lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
                 lblResultadoBusqueda.setVisible(true);
             }
@@ -456,28 +588,35 @@ public class MainFX extends Application {
 
         btnFalta.setOnAction(e -> {
             lblResultadoBusqueda.setVisible(false);
+            String val = txtCodigoBuscar.getText().trim();
+            if (val.isEmpty()) return;
+
             try {
-                String val = txtCodigoBuscar.getText().trim();
-                if (val.isEmpty()) return;
                 long codigo = Long.parseLong(val);
-                AlumnoCalificado alm = admin1.ponerFalta(codigo);
-
-                actualizarDatosTabla(); 
-
-                if (alm.getFaltas() > 3) {
-                    lblResultadoBusqueda.setText("⚠ ¡El alumno " + alm.getNombre() + " superó las 3 faltas y fue retirado!");
-                    lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ef9a9a; -fx-text-fill: #c62828; -fx-font-weight: bold;");
-                } else {
-                    lblResultadoBusqueda.setText("✔ Falta registrada. Total de faltas: " + alm.getFaltas());
-                    lblResultadoBusqueda.setStyle("-fx-background-color: #e8f5e9; -fx-border-color: #a5d6a7; -fx-text-fill: #2e7d32; -fx-font-weight: bold;");
-                }
-                lblResultadoBusqueda.setVisible(true);
+                ejecutarTarea(
+                        "Registrando falta...",
+                        () -> admin1.ponerFalta(codigo),
+                        alm -> {
+                            actualizarDatosTabla();
+                            if (alm.getFaltas() > 3) {
+                                lblResultadoBusqueda.setText("⚠ ¡El alumno " + alm.getNombre() + " superó las 3 faltas y fue retirado!");
+                                lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ef9a9a; -fx-text-fill: #c62828; -fx-font-weight: bold;");
+                            } else {
+                                lblResultadoBusqueda.setText("✔ Falta registrada. Total de faltas: " + alm.getFaltas());
+                                lblResultadoBusqueda.setStyle("-fx-background-color: #e8f5e9; -fx-border-color: #a5d6a7; -fx-text-fill: #2e7d32; -fx-font-weight: bold;");
+                            }
+                            lblResultadoBusqueda.setVisible(true);
+                        },
+                        error -> {
+                            lblResultadoBusqueda.setText(error.getMessage());
+                            lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
+                            lblResultadoBusqueda.setVisible(true);
+                        },
+                        "HiloRegistrarFalta",
+                        btnBuscar, btnFalta
+                );
             } catch (NumberFormatException ex) {
                 lblResultadoBusqueda.setText("Ingrese un código numérico válido.");
-                lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
-                lblResultadoBusqueda.setVisible(true);
-            } catch (Exception ex) {
-                lblResultadoBusqueda.setText(ex.getMessage());
                 lblResultadoBusqueda.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
                 lblResultadoBusqueda.setVisible(true);
             }
@@ -525,20 +664,31 @@ public class MainFX extends Application {
         btnVerificarRevoke.setOnAction(e -> {
             lblResultadoRevoke.setVisible(false);
             revokeControls.setVisible(false);
+            String val = txtCodigoRevocar.getText().trim();
+            if (val.isEmpty()) return;
+
             try {
-                String val = txtCodigoRevocar.getText().trim();
-                if (val.isEmpty()) return;
                 long codigo = Long.parseLong(val);
-                AlumnoCalificado encontrado = admin1.buscarAlumnos(codigo);
-                lblAlumnoInfo.setText("Alumno: " + encontrado.getNombre() + " " + encontrado.getApellido() + "\nFaltas actuales: " + encontrado.getFaltas());
-                spinQuitar.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, Math.max(1, encontrado.getFaltas()), 1));
-                revokeControls.setVisible(true);
+                ejecutarTarea(
+                        "Verificando alumno...",
+                        () -> admin1.buscarAlumnos(codigo),
+                        encontrado -> {
+                            lblAlumnoInfo.setText("Alumno: " + encontrado.getNombre() + " " + encontrado.getApellido()
+                                    + "\nFaltas actuales: " + encontrado.getFaltas());
+                            spinQuitar.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                                    1, Math.max(1, encontrado.getFaltas()), 1));
+                            revokeControls.setVisible(true);
+                        },
+                        error -> {
+                            lblResultadoRevoke.setText(error.getMessage());
+                            lblResultadoRevoke.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
+                            lblResultadoRevoke.setVisible(true);
+                        },
+                        "HiloVerificarAlumno",
+                        btnVerificarRevoke, btnConfirmarRevoke
+                );
             } catch (NumberFormatException ex) {
                 lblResultadoRevoke.setText("Ingrese un código válido.");
-                lblResultadoRevoke.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
-                lblResultadoRevoke.setVisible(true);
-            } catch (Exception ex) {
-                lblResultadoRevoke.setText(ex.getMessage());
                 lblResultadoRevoke.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
                 lblResultadoRevoke.setVisible(true);
             }
@@ -548,19 +698,28 @@ public class MainFX extends Application {
             try {
                 long codigo = Long.parseLong(txtCodigoRevocar.getText().trim());
                 int cantidad = spinQuitar.getValue();
-                AlumnoCalificado alm = admin1.revocarFalta(codigo, cantidad);
-
-                actualizarDatosTabla();
-
-                lblResultadoRevoke.setText("✔ Faltas reducidas. Total actual de faltas: " + alm.getFaltas());
-                lblResultadoRevoke.setStyle("-fx-background-color: #e8f5e9; -fx-border-color: #a5d6a7; -fx-text-fill: #2e7d32; -fx-font-weight: bold;");
-                lblResultadoRevoke.setVisible(true);
-
-                // Actualizar info en pantalla
-                lblAlumnoInfo.setText("Alumno: " + alm.getNombre() + " " + alm.getApellido() + "\nFaltas actuales: " + alm.getFaltas());
-                spinQuitar.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, Math.max(1, alm.getFaltas()), 1));
-            } catch (Exception ex) {
-                lblResultadoRevoke.setText("Error: " + ex.getMessage());
+                ejecutarTarea(
+                        "Revocando faltas...",
+                        () -> admin1.revocarFalta(codigo, cantidad),
+                        alm -> {
+                            actualizarDatosTabla();
+                            lblResultadoRevoke.setText("✔ Faltas reducidas. Total actual de faltas: " + alm.getFaltas());
+                            lblResultadoRevoke.setStyle("-fx-background-color: #e8f5e9; -fx-border-color: #a5d6a7; -fx-text-fill: #2e7d32; -fx-font-weight: bold;");
+                            lblResultadoRevoke.setVisible(true);
+                            lblAlumnoInfo.setText("Alumno: " + alm.getNombre() + " " + alm.getApellido() + "\nFaltas actuales: " + alm.getFaltas());
+                            spinQuitar.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                                    1, Math.max(1, alm.getFaltas()), 1));
+                        },
+                        error -> {
+                            lblResultadoRevoke.setText("Error: " + error.getMessage());
+                            lblResultadoRevoke.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
+                            lblResultadoRevoke.setVisible(true);
+                        },
+                        "HiloRevocarFalta",
+                        btnVerificarRevoke, btnConfirmarRevoke
+                );
+            } catch (NumberFormatException ex) {
+                lblResultadoRevoke.setText("Ingrese un código válido.");
                 lblResultadoRevoke.setStyle("-fx-background-color: #ffebee; -fx-border-color: #ffcdd2; -fx-text-fill: #c62828; -fx-font-weight: bold;");
                 lblResultadoRevoke.setVisible(true);
             }
