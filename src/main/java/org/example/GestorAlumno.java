@@ -18,27 +18,27 @@ public class GestorAlumno {
             if (conn == null) {
                 throw new SQLException("No se pudo conectar a la base de datos. Verifique su servidor.");
             }
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, alm.getCodigo());
-                pstmt.setString(2, alm.getNombre());
-                pstmt.setString(3, alm.getApellido());
-                pstmt.setString(4, alm.getCarrera());
-                pstmt.setInt(5, alm.getEdad());
-                pstmt.setInt(6, alm.getFaltas());
-                pstmt.setBoolean(7, alm.isHorarioAprobado());
+                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                    pstmt.setLong(1, alm.getCodigo());
+                    pstmt.setString(2, alm.getNombre());
+                    pstmt.setString(3, alm.getApellido());
+                    pstmt.setString(4, alm.getCarrera());
+                    pstmt.setInt(5, alm.getEdad());
+                    pstmt.setInt(6, alm.getFaltas());
+                    pstmt.setBoolean(7, alm.isHorarioAprobado());
 
-                pstmt.executeUpdate();
-                System.out.println("Alumno guardado exitosamente en la base de datos.");
+                    pstmt.executeUpdate();
+                    System.out.println("Alumno guardado exitosamente en la base de datos.");
             }
         }
     }
 
     /*
-    Enlistamos los alumnos que estén calificados, identificados con la variable horarioAprobado.
+    Enlistamos todos los alumnos. Ya no filtramos por horarioAprobado para que no desaparezcan de la lista.
      */
     public synchronized List<Alumno> obtenerAlumnos() throws SQLException {
         List<Alumno> lista = new ArrayList<>();
-        String sql = "SELECT * FROM Alumnos WHERE horarioAprobado = 1";
+        String sql = "SELECT * FROM Alumnos";
 
         try (Connection conn = miConexion.conectar()) {
             if (conn == null) {
@@ -98,8 +98,8 @@ public class GestorAlumno {
     }
 
     /*
-    Metodo que servira para colocar faltas a los alumnos que no asistan
-    si tienen más de 3 faltas se los retira de la lista de alumnos calificados
+    Metodo que servira para colocar faltas a los alumnos que no asistan.
+    Si tienen más de 3 faltas se marcarán como inactivos en la interfaz.
      */
     public synchronized AlumnoCalificado ponerFalta(long codigo) {
         AlumnoCalificado alm = buscarAlumnos(codigo);

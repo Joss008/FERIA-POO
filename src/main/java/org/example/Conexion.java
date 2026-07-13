@@ -5,7 +5,7 @@ import java.sql.*;
  *  Clase que conectara nuestro programa con la base de datos
  */
 public class Conexion {
-    String url = "jdbc:sqlserver://localhost:1433;"
+    String url = "jdbc:sqlserver://localhost:1435;"
             + "databaseName=ComedorEPIS;"
             + "encrypt=true;"
             + "trustServerCertificate=true;";
