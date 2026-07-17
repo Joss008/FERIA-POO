@@ -166,18 +166,7 @@ public class MainFX extends Application {
 
         ejecutarTarea(
                 silencioso ? "Sincronizando lista de alumnos..." : "Cargando lista de alumnos...",
-                () -> {
-                    List<Alumno> alumnos = admin1.obtenerAlumnos();
-                    List<AlumnoCalificado> calificados = new ArrayList<>();
-                    if (alumnos != null) {
-                        for (Alumno alumno : alumnos) {
-                            if (alumno instanceof AlumnoCalificado calificado) {
-                                calificados.add(calificado);
-                            }
-                        }
-                    }
-                    return List.copyOf(calificados);
-                },
+                () -> List.copyOf(admin1.obtenerAlumnos()),
                 calificados -> {
                     data.setAll(calificados);
                     actualizarResumenComedor();
@@ -192,6 +181,7 @@ public class MainFX extends Application {
                 "HiloCargaAlumnos"
         );
     }
+
 
     private <T> void ejecutarTarea(String mensajeEstado, Callable<T> trabajo, java.util.function.Consumer<T> alCompletar,
                                    java.util.function.Consumer<Exception> alFallar, String nombreHilo, Node... controles) {
@@ -316,32 +306,35 @@ public class MainFX extends Application {
 
         TextField txtNombre = new TextField(); txtNombre.setPromptText("Ingrese Nombres");
         TextField txtApellido = new TextField(); txtApellido.setPromptText("Ingrese Apellidos");
-        TextField txtCarrera = new TextField(); txtCarrera.setPromptText("Ingrese Carrera");
+        TextField txtCarrera = new TextField(); txtCarrera.setPromptText("Ciclo: I, II, III...X");
         TextField txtCodigo = new TextField(); txtCodigo.setPromptText("Ingrese Código");
         TextField txtEdad = new TextField(); txtEdad.setPromptText("Ingrese Edad");
+        TextField txtDias = new TextField(); txtDias.setPromptText("Ej: LUNES,MIERCOLES,VIERNES");
 
         addFormRow(grid, "Nombre:", txtNombre, 0);
         addFormRow(grid, "Apellido:", txtApellido, 1);
-        addFormRow(grid, "Carrera:", txtCarrera, 2);
+        addFormRow(grid, "Ciclo:", txtCarrera, 2);
         addFormRow(grid, "Código:", txtCodigo, 3);
         addFormRow(grid, "Edad:", txtEdad, 4);
+        addFormRow(grid, "Días solicitados:", txtDias, 5);
 
         Button btnGuardar = new Button("Guardar Alumno");
         GridPane.setMargin(btnGuardar, new Insets(15, 0, 0, 0));
-        grid.add(btnGuardar, 1, 5);
+        grid.add(btnGuardar, 1, 6);
 
         Label lblMensajeForm = new Label();
         lblMensajeForm.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
-        grid.add(lblMensajeForm, 1, 6);
+        grid.add(lblMensajeForm, 1, 7);
 
         btnGuardar.setOnAction(e -> {
             String nombre = txtNombre.getText().trim();
             String apellido = txtApellido.getText().trim();
-            String carrera = txtCarrera.getText().trim();
+            String ciclo = txtCarrera.getText().trim().toUpperCase();
             String strCodigo = txtCodigo.getText().trim();
             String strEdad = txtEdad.getText().trim();
+            String dias = txtDias.getText().trim().toUpperCase();
 
-            if (nombre.isEmpty() || apellido.isEmpty() || carrera.isEmpty() || strCodigo.isEmpty() || strEdad.isEmpty()) {
+            if (nombre.isEmpty() || apellido.isEmpty() || ciclo.isEmpty() || strCodigo.isEmpty() || strEdad.isEmpty()) {
                 mostrarAlerta("Campos vacíos", "Por favor complete todos los datos del alumno.");
                 return;
             }
@@ -349,7 +342,8 @@ public class MainFX extends Application {
             try {
                 long codigo = Long.parseLong(strCodigo);
                 int edad = Integer.parseInt(strEdad);
-                AlumnoCalificado nuevoAlumno = new AlumnoCalificado(nombre, apellido, carrera, codigo, edad, 0, true);
+                String diasFinal = dias.isEmpty() ? "NO ESPECIFICADO" : dias;
+                AlumnoCalificado nuevoAlumno = new AlumnoCalificado(nombre, apellido, ciclo, codigo, edad, 0, true, diasFinal);
 
                 ejecutarTarea(
                         "Guardando alumno en la base de datos...",
@@ -365,6 +359,7 @@ public class MainFX extends Application {
                             txtCarrera.clear();
                             txtCodigo.clear();
                             txtEdad.clear();
+                            txtDias.clear();
                             actualizarDatosTabla();
                         },
                         error -> mostrarAlerta("Error de Base de Datos", "No se pudo guardar el alumno: " + error.getMessage()),
@@ -416,7 +411,13 @@ public class MainFX extends Application {
     }
 
     private void actualizarResumenComedor() {
-        totalAlumnosLabel.setText(String.valueOf(data.size()));
+        // Usamos un Stream para filtrar y contar SOLO a los alumnos que siguen activos
+        long totalActivos = data.stream()
+                .filter(AlumnoCalificado::isHorarioAprobado)
+                .count();
+
+        // Actualizamos la etiqueta gigante con el nuevo número
+        totalAlumnosLabel.setText(String.valueOf(totalActivos));
     }
 
     private Tab createTabLista() {
@@ -440,9 +441,13 @@ public class MainFX extends Application {
         colApellido.setMinWidth(180);
         colApellido.setCellValueFactory(new PropertyValueFactory<>("apellido"));
 
-        TableColumn<AlumnoCalificado, String> colCarrera = new TableColumn<>("Carrera");
-        colCarrera.setMinWidth(180);
-        colCarrera.setCellValueFactory(new PropertyValueFactory<>("carrera"));
+        TableColumn<AlumnoCalificado, String> colCarrera = new TableColumn<>("Ciclo");
+        colCarrera.setMinWidth(100);
+        colCarrera.setCellValueFactory(new PropertyValueFactory<>("ciclo"));
+
+        TableColumn<AlumnoCalificado, String> colDias = new TableColumn<>("Días Solicitados");
+        colDias.setMinWidth(180);
+        colDias.setCellValueFactory(new PropertyValueFactory<>("diasSolicitados"));
 
         TableColumn<AlumnoCalificado, Integer> colEdad = new TableColumn<>("Edad");
         colEdad.setMinWidth(70);
@@ -457,17 +462,37 @@ public class MainFX extends Application {
         colCalificado.setCellValueFactory(new PropertyValueFactory<>("horarioAprobado"));
 
         // Mantenemos tu diseño visual (status Activo/Retirado) intacto
+        // Nueva lógica visual para el estado del alumno (Activo, En riesgo, Retirado)
         colCalificado.setCellFactory(column -> new TableCell<AlumnoCalificado, Boolean>() {
             @Override
             protected void updateItem(Boolean item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
+
+                // Verificamos que la fila exista y tenga un alumno cargado
+                if (empty || item == null || getTableRow() == null || getTableRow().getItem() == null) {
                     setGraphic(null);
-                    setText(null); // Añadimos esto por seguridad visual
+                    setText(null);
                 } else {
-                    Label status = new Label(item ? "Activo" : "Retirado");
-                    status.setStyle(item ? "-fx-background-color: #e8f5e9; -fx-text-fill: #2e7d32; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;"
-                            : "-fx-background-color: #ffebee; -fx-text-fill: #c62828; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;");
+                    // Extraemos el objeto AlumnoCalificado completo de esta fila
+                    AlumnoCalificado alumno = getTableRow().getItem();
+                    int faltas = alumno.getFaltas();
+
+                    Label status = new Label();
+
+                    if (faltas < 3) {
+                        // Menos de 3 faltas: Verde (Activo)
+                        status.setText("✔ Activo");
+                        status.setStyle("-fx-background-color: #e8f5e9; -fx-text-fill: #2e7d32; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;");
+                    } else if (faltas == 3) {
+                        // Exactamente 3 faltas: Ámbar/Naranja (En riesgo)
+                        status.setText("⚠ En riesgo");
+                        status.setStyle("-fx-background-color: #fff3e0; -fx-text-fill: #e65100; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;");
+                    } else {
+                        // Más de 3 faltas: Rojo (Retirado)
+                        status.setText("❌ Retirado");
+                        status.setStyle("-fx-background-color: #ffebee; -fx-text-fill: #c62828; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-weight: bold;");
+                    }
+
                     setGraphic(status);
                     setText(null);
                 }
@@ -475,7 +500,7 @@ public class MainFX extends Application {
         });
 
         table.getColumns().setAll(List.of(
-                colCodigo, colNombre, colApellido, colCarrera, colEdad, colFaltas, colCalificado
+                colCodigo, colNombre, colApellido, colCarrera, colDias, colEdad, colFaltas, colCalificado
         ));
         table.setItems(data);
         table.setPlaceholder(new Label("No hay alumnos registrados en el sistema o error de BD."));
@@ -566,8 +591,9 @@ public class MainFX extends Application {
                         () -> admin1.buscarAlumnos(codigo),
                         encontrado -> {
                             lblResultadoBusqueda.setText("✔ Encontrado:\n" + encontrado.getNombre() + " " + encontrado.getApellido()
-                                    + "\nCarrera: " + encontrado.getCarrera() + "\nFaltas: " + encontrado.getFaltas()
-                                    + "\nCódigo: " + encontrado.getCodigo());
+                                    + "\nCiclo: " + encontrado.getCiclo() + "\nFaltas: " + encontrado.getFaltas()
+                                    + "\nCódigo: " + encontrado.getCodigo()
+                                    + "\nDías: " + encontrado.getDiasSolicitados());
                             lblResultadoBusqueda.setStyle("-fx-background-color: #e3f2fd; -fx-border-color: #bbdefb; -fx-text-fill: #0277bd; -fx-font-weight: bold;");
                             lblResultadoBusqueda.setVisible(true);
                         },
@@ -694,21 +720,39 @@ public class MainFX extends Application {
             }
         });
 
+        // Campo de justificación (requerido al quitar faltas)
+        Label lblJustificacion = new Label("Justificación:");
+        lblJustificacion.setStyle("-fx-font-weight: bold; -fx-text-fill: #333333;");
+        TextField txtJustificacion = new TextField();
+        txtJustificacion.setPromptText("Ingrese el motivo de la revocación");
+        txtJustificacion.setPrefWidth(300);
+        revokeControls.getChildren().addAll(lblJustificacion, txtJustificacion);
+
         btnConfirmarRevoke.setOnAction(e -> {
             try {
                 long codigo = Long.parseLong(txtCodigoRevocar.getText().trim());
                 int cantidad = spinQuitar.getValue();
+                String justificacion = txtJustificacion.getText().trim();
+
+                if (justificacion.isEmpty()) {
+                    lblResultadoRevoke.setText("⚠ Debe ingresar una justificación para quitar la falta.");
+                    lblResultadoRevoke.setStyle("-fx-background-color: #fff3e0; -fx-border-color: #ffb74d; -fx-text-fill: #e65100; -fx-font-weight: bold;");
+                    lblResultadoRevoke.setVisible(true);
+                    return;
+                }
+
                 ejecutarTarea(
                         "Revocando faltas...",
-                        () -> admin1.revocarFalta(codigo, cantidad),
+                        () -> admin1.revocarFalta(codigo, cantidad, justificacion),
                         alm -> {
                             actualizarDatosTabla();
-                            lblResultadoRevoke.setText("✔ Faltas reducidas. Total actual de faltas: " + alm.getFaltas());
+                            lblResultadoRevoke.setText("✔ Faltas reducidas. Total actual de faltas: " + alm.getFaltas() + "\nJustificación guardada.");
                             lblResultadoRevoke.setStyle("-fx-background-color: #e8f5e9; -fx-border-color: #a5d6a7; -fx-text-fill: #2e7d32; -fx-font-weight: bold;");
                             lblResultadoRevoke.setVisible(true);
                             lblAlumnoInfo.setText("Alumno: " + alm.getNombre() + " " + alm.getApellido() + "\nFaltas actuales: " + alm.getFaltas());
                             spinQuitar.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(
                                     1, Math.max(1, alm.getFaltas()), 1));
+                            txtJustificacion.clear();
                         },
                         error -> {
                             lblResultadoRevoke.setText("Error: " + error.getMessage());
