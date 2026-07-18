@@ -10,13 +10,10 @@ import java.util.Set;
 Clase principal del programa.
  */
 public class Main {
-
-    // Días válidos de la semana (lunes a viernes)
     private static final List<String> DIAS_VALIDOS = Arrays.asList(
             "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"
     );
 
-    // Ciclos válidos en números romanos (I al X)
     private static final List<String> CICLOS_VALIDOS = Arrays.asList(
             "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"
     );
@@ -77,9 +74,7 @@ public class Main {
                  */
                 switch (opcion) {
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 1: Lista de alumnos calificados filtrada por día
-                    // ─────────────────────────────────────────────────────────
+
                     case 1:
                         System.out.println("\nSeleccione el día de la semana para ver la lista:");
                         System.out.println("  1. LUNES");
@@ -115,9 +110,6 @@ public class Main {
                         }
                         break;
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 2: Buscar alumno por código
-                    // ─────────────────────────────────────────────────────────
                     case 2:
                         System.out.println("Ingrese el código del alumno");
                         long codigo = teclado.nextLong();
@@ -129,9 +121,6 @@ public class Main {
                         }
                         break;
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 3: Agregar alumno (con ciclo romano + diasSolicitados)
-                    // ─────────────────────────────────────────────────────────
                     case 3:
                         System.out.println("Ingrese el nombre del estudiante");
                         String nombre = teclado.nextLine();
@@ -156,7 +145,7 @@ public class Main {
                         int edad = teclado.nextInt();
                         teclado.nextLine();
 
-                        // Pedir días solicitados (pueden ser varios)
+
                         Set<String> diasSet = new LinkedHashSet<>();
                         System.out.println("Ingrese los días solicitados en el comedor (LUNES, MARTES, MIERCOLES, JUEVES, VIERNES).");
                         System.out.println("Ingrese un día a la vez. Escriba 'FIN' cuando termine.");
@@ -183,9 +172,7 @@ public class Main {
                         System.out.println("Alumno registrado con días: " + diasSolicitados);
                         break;
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 4: Poner falta
-                    // ─────────────────────────────────────────────────────────
+
                     case 4:
                         System.out.println("Ingrese el codigo del alumno");
                         long codigoBuscar = teclado.nextLong();
@@ -193,9 +180,6 @@ public class Main {
                         admin1.ponerFalta(codigoBuscar);
                         break;
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 5: Quitar falta con justificación
-                    // ─────────────────────────────────────────────────────────
                     case 5:
                         System.out.println("Ingrese el codigo del alumno");
                         long codigoBuscarRevocar = teclado.nextLong();
@@ -224,23 +208,14 @@ public class Main {
                         }
                         break;
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 6: Ver justificaciones de faltas (reportes)
-                    // ─────────────────────────────────────────────────────────
                     case 6:
                         admin1.mostrarReportesJustificaciones();
                         break;
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 7: Historial de inasistencias
-                    // ─────────────────────────────────────────────────────────
                     case 7:
                         admin1.mostrarHistorialInasistencias();
                         break;
 
-                    // ─────────────────────────────────────────────────────────
-                    // CASE 8: Salir
-                    // ─────────────────────────────────────────────────────────
                     case 8:
                         System.out.println("Finalizando el programa....");
                         break;

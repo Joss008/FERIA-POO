@@ -255,6 +255,7 @@ public class GestorAlumno {
     Muestra N° de orden, apellidos, nombres y ciclo de todos los alumnos.
      */
     public synchronized void mostrarHistorialInasistencias() throws SQLException {
+
         // 1. Agregamos WHERE faltas > 0 para omitir a los que tienen 0 faltas
         // 2. Ordenamos primero por faltas DESC (de mayor a menor)
         String sql = "SELECT ROW_NUMBER() OVER (ORDER BY faltas DESC, apellido, nombre) AS nro, " +
